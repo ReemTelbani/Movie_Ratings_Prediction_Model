@@ -1,0 +1,547 @@
+---
+title: "R for Data Science Project"
+author: "Reem Osama El-Telbani"
+date: "28 Feb 2021"
+output: 
+  html_document: 
+    df_print: paged
+    toc: yes
+---
+
+Report Requirements:
+You are required to apply the knowledge acquired during the course – working on the dataset referenced in page 2 – to create a report using RStudio and RMarkdown along with the other packages studied (mainly tidyverse and tidymodels).
+
+Task #1: Choose at least two of the following points to answer:
+ Is there a relationship between a movie budget and its number of votes? What about the rating?
+ **What are the genres that have the highest average rating?**
+ What are the plot keywords that have the highest average rating?
+ **Who are the highly rated directors? Who are the highly rated actors?**
+ Who are the most profitable directors? Who are the most profitable actors?
+ Which countries have higher average rating? Which countries produced more movies?
+ How did the number of movie rating audience evolved over the years?
+
+
+Task #2: Design and implement a predictive model to find the expected movie rating score using the features supplied in the dataset. You are free to choose any of the following:
+ The prediction method (classification, regression, or otherwise).
+ The features needed for prediction.
+ The Model evaluation method or criteria.
+
+
+Dataset Specifications
+It is a dataset from the TMDB (The Movies Database) website for ~5000 movie titles separated into two files:
+
+>**Movie Metadata**
+>
+>=====================================================================================================================
+>
+>| **Column Name**      |  **Column Description**                                                                    |
+>
+>|====================================================================================================================
+>
+>| movie_id             |  the movie id                                                                              |
+>
+>| title                |  the movie title                                                                           |
+>
+>| original_language    |  the movie language                                                                        |
+>
+>| release_date         |  the movie releasedate                                                                     |
+>
+>| budget               |  the movie budget                                                                          |
+>
+>| revenue              |  the movie revenue                                                                         |
+>
+>| runtime              |  the movie runtime in minutes                                                              |
+>
+>| vote_average         |  the movie TMDB average rating                                                             |
+>
+>| vote_count           |  the movie TMDB rating users count                                                         |
+>
+>| popularity           |  the movie TMDB popularity score                                                           |
+>
+>| genres               |  the movie genres separated by a pipe                                                      |
+>
+>| keywords             |  the movie keywords separated by a pipe                                                    |
+>
+>| production_companies |  the movie companies separated by a pipe                                                   |
+>
+>| production_countries |  the movie countries separated by a pipe                                                   |
+>
+>=====================================================================================================================
+
+
+>**Movie Cast and Crew**
+>
+>=====================================================================================================================
+>
+>| **Column Name**      | **Column Description**                                                                     |
+>
+>=====================================================================================================================
+>
+>| movie_id             |  the movie id                                                                              |
+>
+>| director             |  the movie director name                                                                   |
+>
+>| producer             |  the movie producer name                                                                   |
+>
+>| actor_1              |  the movie actor_1 name                                                                    |
+>
+>| actor_2              |  the movie actor_2 name                                                                    |       
+>
+>| actor_3              |  the movie actor_3 name                                                                    |
+>
+>=====================================================================================================================
+
+>=====================================================================================================================
+>
+>| Dataset Reference: https://www.kaggle.com/tmdb/tmdb-movie-metadata/                                               |
+>
+>| (Attached with the dataset the script used to transform from the original dataset)                                |
+>
+>=====================================================================================================================
+
+
+
+#Start From Here
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r }
+library('tidyverse')
+library('rmarkdown')
+library('tidymodels')
+
+library(readr)
+library(caret)
+library(DAAG)
+library(dplyr)
+```
+
+# Task 1
+
+```{r}
+tmdb_cast_crew <- read_csv("tmdb_cast_crew.csv", 
+    col_types = cols(movie_id = col_character()))
+#View(tmdb_cast_crew)
+
+tmdb_movies_metadata <- read_csv("tmdb_movies_metadata.csv", 
+    col_types = cols(movie_id = col_character(), 
+        release_date = col_date(format = "%Y-%m-%d")))
+#View(tmdb_movies_metadata)
+```
+
+```{r}
+glimpse(tmdb_movies_metadata)
+```
+
+```{r}
+glimpse(tmdb_cast_crew)
+```
+
+# Data Wrangling
+#### Here we are going to do 2 steps:
+
+ 1- Assessing Data: exploring data and giving comments over all the wired, wrong, and missing values in the data.
+
+ 2- Cleaning data: clean the data by using the comments we wrote.
+<br>
+<br>
+
+## 1 - Assessing Data
+
+### Explore data
+
+```{r}
+tmdb_movies_metadata
+```
+
+
+```{r}
+tmdb_cast_crew
+```
+
+
+```{r}
+summary(tmdb_movies_metadata)
+```
+
+```{r}
+summary(tmdb_cast_crew)
+```
+
+
+
+
+### check na values
+```{r}
+sum(is.na(tmdb_cast_crew))
+```
+<br>
+**comments:**
+<br>
+there is 1212 NA values out of 4,803 rows in , tmdb_cast_crew. 
+
+
+```{r}
+colSums(is.na(tmdb_cast_crew))
+```
+<br>
+**comments:** imputing the missing values here will not be the optimal thing, we can remove the producer column then removing the remaining na values.
+
+<br>
+
+
+### check na values
+```{r}
+sum(is.na(tmdb_movies_metadata))
+```
+<br>
+**comments:**
+<br>
+there is 956 NA values out of 4,795 rows in , tmdb_movies_metadata. 
+we can impute the missing values 
+
+```{r}
+colSums(is.na(tmdb_movies_metadata))
+```
+<br>
+**comments:** it seems that there is a three columns that have a lot of nan values like : keywords, production_companies, and production_countries. we can remove them simply and these columns are not important that much. 
+then we can remoove the na values.
+<br>
+
+tmdb_cast_crew
+tmdb_movies_metadata
+
+```{r}
+sum(duplicated(tmdb_cast_crew))
+```
+**comments:**
+<br>
+no duplicates.
+<br>
+
+```{r}
+sum(duplicated(tmdb_movies_metadata))
+```
+**comments:**
+<br>
+no duplicates.
+<br>
+
+#### check unique values and the number of occurience
+```{r}
+#length(unique(df))
+apply(tmdb_cast_crew, 2, function(x) length(unique(x)))
+```
+
+
+#### check unique values and the number of occurience
+```{r}
+#length(unique(df))
+apply(tmdb_movies_metadata, 2, function(x) length(unique(x)))
+```
+
+## 2-cleansing
+data i will clean :
+
+1-remove columns:
+keywords, production_companies, and production_countries from  tmdb_movies_metadata
+producer from tmdb_cast_crew
+
+2-remove na values 
+
+```{r}
+metadata = subset(tmdb_movies_metadata, select = -c(keywords,production_companies,production_countries))
+crew = subset(tmdb_cast_crew, select = -c(producer))
+
+metadata <- na.omit(metadata) 
+crew <- na.omit(crew) 
+```
+
+
+```{r}
+colSums(is.na(metadata))
+```
+
+
+```{r}
+colSums(is.na(crew))
+```
+
+
+```{r}
+metadata
+```
+
+## 3- check outlaiers 
+
+```{r}
+boxplot( metadata$budget ,
+main = "budget",
+at = c(1),
+names = c( "budget"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+```{r}
+boxplot( metadata$revenue ,
+main = "revenue",
+at = c(1),
+names = c( "revenue"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+```{r}
+boxplot( metadata$runtime ,
+main = "runtime",
+at = c(1),
+names = c( "runtime"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+
+```{r}
+boxplot(metadata$vote_average ,
+main = "vote_average",
+at = c(1),
+names = c("vote_average"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+
+```{r}
+boxplot(metadata$vote_count ,
+main = "vote_count",
+at = c(1),
+names = c("vote_count"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+#### 3- check outlaiers 
+```{r}
+boxplot( metadata$popularity ,
+main = "popularity",
+at = c(1),
+names = c( "popularity"),
+las = 2,
+#col = c("orange","red","green"),
+border = "brown",
+horizontal = TRUE,
+notch = FALSE
+)
+```
+
+boxplot just shows that these column has outlaiers but we will keep them.
+
+
+# after assessing data and cleaning it we can start answering the following quetsions:
+
+
+
+```{r}
+metadata
+```
+
+**What are the genres that have the highest average rating?**
+
+```{r}
+metadata %>% 
+  group_by (genres) %>% 
+  summarise(max_rate = max(vote_average)) %>%
+  filter(max(max_rate) == max_rate)
+```
+
+
+**Who are the highly rated directors? Who are the highly rated actors?**
+```{r}
+metadata %>% inner_join(crew) -> df
+
+```
+
+```{r}
+df %>% 
+  group_by (director) %>% 
+  summarise(max_rated_director = max(vote_average)) %>%
+  filter(max(max_rated_director) == max_rated_director) %>%
+  select (director)
+```
+
+
+```{r}
+df %>% 
+  group_by (actor_1) %>% 
+  summarise(max_rated_actor_1 = max(vote_average)) %>%
+  filter(max(max_rated_actor_1) == max_rated_actor_1) %>%
+  select (actor_1)
+```
+
+```{r}
+df %>% 
+  group_by (actor_2) %>% 
+  summarise(max_rated_actor_2 = max(vote_average)) %>%
+  filter(max(max_rated_actor_2) == max_rated_actor_2) %>%
+  select (actor_2)
+```
+
+```{r}
+df %>% 
+  group_by (actor_3) %>% 
+  summarise(max_rated_actor_3 = max(vote_average)) %>%
+  filter(max(max_rated_actor_3) == max_rated_actor_3) %>%
+  select (actor_3)
+```
+
+```{r}
+df %>%
+  select(budget,revenue, runtime , vote_average, vote_count, popularity) %>%
+  mutate(budget = (budget - mean(budget))/sd(budget)) %>%
+  mutate(revenue = (revenue - mean(revenue))/sd(revenue)) %>%
+  mutate(runtime = (runtime - mean(runtime))/sd(runtime)) %>%
+  mutate(vote_average = (vote_average - mean(vote_average))/sd(vote_average)) %>%
+  mutate(vote_count = (vote_count - mean(vote_count))/sd(vote_count)) %>%
+  mutate(popularity = (popularity - mean(popularity))/sd(popularity)) -> df_scaled
+```
+
+```{r}
+df_scaled
+```
+
+```{r}
+ggplot(df_scaled,
+       aes(x = vote_average, 
+           y = budget)) + 
+  geom_point() 
+```
+as much the budget increases the vote average increases , there is a weak linear colinearity between the two features
+```{r}
+ggplot(df_scaled,
+       aes(x = vote_average, 
+           y = revenue)) + 
+  geom_point() 
+```
+
+as much the revenue increases the vote average increases , there is a weak linear colinearity between the two features
+
+
+```{r}
+ggplot(df_scaled,
+       aes(x = vote_average, 
+           y = runtime
+)) + 
+  geom_point() 
+```
+
+ as much the runtime increases the vote average increases , there is a weak linear colinearity between the two features
+
+```{r}
+ggplot(df_scaled,
+       aes(x = vote_average, 
+           y = vote_count)) + 
+  geom_point() 
+```
+ as much the vote count increases the vote average increases , there is a weak linear colinearity between the two features
+
+
+```{r}
+ggplot(df_scaled,
+       aes(x = vote_average, 
+           y = popularity)) + 
+  geom_point() 
+```
+ as much the popularity increases the vote average increases , there is a weak linear colinearity between the two features
+
+# Task 2 
+
+
+#lets see the correlation between the independent variables
+
+```{r}
+cor(df_scaled[,names(df_scaled)!="vote_average"])
+```
+Predictors are highly independent, that’s good! 
+
+```{r}
+df_scaled %>% 
+  select(budget,revenue, runtime ,vote_count ,popularity, vote_average) ->df_scaled
+```
+
+
+# Splitting dataset
+
+below splits the df_scaled data set so that 80% is used for training a linear regression model and 20% is used to evaluate the model performance.
+
+```{r}
+# Split the data into training and test set
+set.seed(123)
+training.samples <- df_scaled$revenue %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data  <- df_scaled[training.samples, ]
+test.data <- df_scaled[-training.samples, ]
+```
+
+# Building Model
+```{r}
+# Build the model
+model <- lm(vote_average ~., data = train.data)
+```
+
+# Make Predictions
+```{r}
+# Make predictions and compute the R2, RMSE and MAE
+predictions <- model %>% predict(test.data)
+```
+
+#Evaluate Model Using R2, EMSE , MAE 
+```{r}
+data.frame( R2 = R2(predictions, test.data$vote_average),
+            RMSE = RMSE(predictions, test.data$vote_average),
+            MAE = MAE(predictions, test.data$vote_average))
+```
+ **Comment:** we can see that the model don't fitting the data very well as the r2 is very low by 18%
+
+the prediction error rate, which should be as small as possible
+```{r}
+RMSE(predictions, test.data$vote_average)/mean(test.data$vote_average)
+```
+it is high!
+
+
+#K-fold cross-validation
+
+```{r}
+# Define training control
+set.seed(123) 
+train.control <- trainControl(method = "cv", number = 10)
+# Train the model
+model <- train(vote_average ~., data = df_scaled, method = "lm",
+               trControl = train.control)
+# Summarize the results
+print(model)
+```
